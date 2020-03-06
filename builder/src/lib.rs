@@ -30,14 +30,14 @@ pub fn derive(input: TokenStream) -> TokenStream {
     
     // eprintln!("fields: {:#?}", fields);
 
-    let set_value_fields = fields.iter().map(|f| {
+    let struct_init_fields = fields.iter().map(|f| {
         let ident = &f.ident;
         quote! {
             #ident: None
         }
     });
     
-    let option_fields = fields.iter().map(|f| {
+    let builder_fields = fields.iter().map(|f| {
         let ident = &f.ident;
         let ty = &f.ty;
         quote!{
@@ -46,7 +46,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     });
     // eprintln!("option fields: {:#?}", option_fields);
 
-    let methods = fields.iter().map(|f| {
+    let builder_methods = fields.iter().map(|f| {
         let ident = &f.ident;
         let ty = &f.ty;
         quote!{
@@ -70,17 +70,17 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #struct_ident {
             pub fn builder() -> #builder_ident {
                 #builder_ident {
-                    #( #set_value_fields ,)*
+                    #( #struct_init_fields ,)*
                 } 
             }
         }
 
         pub struct #builder_ident {
-            #( #option_fields ,)*
+            #( #builder_fields ,)*
         }
 
         impl #builder_ident {
-            #( #methods )*
+            #( #builder_methods )*
 
             pub fn build(&mut self) -> Result<#struct_ident, Box<dyn std::error::Error>> {
                 Ok(#struct_ident {
