@@ -10,7 +10,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
     // eprintln!("SYN: {:#?}", ast);
     // unimplemented!()
-    let ident = ast.ident;
+    let struct_ident = ast.ident;
 
     let fields = if let Struct(
         DataStruct{
@@ -56,10 +56,18 @@ pub fn derive(input: TokenStream) -> TokenStream {
             }
         }
     });
-    
-    let builder_ident = format_ident!("{}Builder", ident);
+
+    let build_fields = fields.iter().map(|f| {
+        let ident = &f.ident;
+        // let ty = &f.ty;
+        quote! {
+            #ident: self.#ident.clone().expect(concat!(stringify!(#ident), " is not set"))
+        }
+    });
+
+    let builder_ident = format_ident!("{}Builder", struct_ident);
     let expanded = quote! {
-        impl #ident {
+        impl #struct_ident {
             pub fn builder() -> #builder_ident {
                 #builder_ident {
                     #( #set_value_fields ,)*
@@ -73,6 +81,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
         impl #builder_ident {
             #( #methods )*
+
+            pub fn build(&mut self) -> Result<#struct_ident, Box<dyn std::error::Error>> {
+                Ok(#struct_ident {
+                    #( #build_fields ,)*
+                })
+            }
         }
 
     };
