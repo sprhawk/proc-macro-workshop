@@ -17,3 +17,5 @@ trybuild = "1.0"
 
 [dependencies]
 # TODO
+syn = { version="^1", features = ["extra-traits"] }
+quote = "^1"
