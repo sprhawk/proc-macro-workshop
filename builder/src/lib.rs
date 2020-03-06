@@ -53,6 +53,17 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     });
     // eprintln!("option fields: {:#?}", option_fields);
+
+    let methods = fields.iter().map(|f| {
+        let ident = &f.ident;
+        let ty = &f.ty;
+        quote!{
+            pub fn #ident(&mut self, #ident: #ty) -> &mut Self {
+                self.#ident = Some(#ident);
+                self
+            }
+        }
+    });
     
     let builder_ident = format_ident!("{}Builder", ident);
     let expanded = quote! {
@@ -67,6 +78,11 @@ pub fn derive(input: TokenStream) -> TokenStream {
         pub struct #builder_ident {
             #( #option_fields ,)*
         }
+
+        impl #builder_ident {
+            #( #methods )*
+        }
+
     };
     TokenStream::from(expanded)
 }
