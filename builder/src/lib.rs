@@ -31,25 +31,17 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // eprintln!("fields: {:#?}", fields);
 
     let set_value_fields = fields.iter().map(|f| {
-        if let Some(ident) = &f.ident {
-            quote! {
-                #ident: None
-            }
-        }
-        else {
-            unimplemented!()
+        let ident = &f.ident;
+        quote! {
+            #ident: None
         }
     });
     
     let option_fields = fields.iter().map(|f| {
-        if let Some(ident) = &f.ident {
-            let ty = &f.ty;
-            quote!{
-                #ident : std::option::Option<#ty>
-            }
-        }
-        else {
-            unimplemented!()
+        let ident = &f.ident;
+        let ty = &f.ty;
+        quote!{
+            #ident : std::option::Option<#ty>
         }
     });
     // eprintln!("option fields: {:#?}", option_fields);
