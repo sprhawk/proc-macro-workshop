@@ -1,10 +1,13 @@
 extern crate proc_macro;
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, DeriveInput, DataStruct, Data::{Struct}, Fields::{Named}, FieldsNamed, Field, Type, TypePath, PathArguments, GenericArgument, AngleBracketedGenericArguments, PathSegment};
-use quote::{quote, format_ident};
+use quote::{format_ident, quote};
+use syn::{
+    parse_macro_input, AngleBracketedGenericArguments, Data::Struct, DataStruct, DeriveInput,
+    Field, Fields::Named, FieldsNamed, GenericArgument, PathArguments, PathSegment, Type, TypePath,
+};
 
-#[proc_macro_derive(Builder)]
+#[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     // eprintln!("TOKENS: {}", input);
     let ast = parse_macro_input!(input as DeriveInput);
@@ -12,22 +15,16 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // unimplemented!()
     let struct_ident = ast.ident;
 
-    let fields = if let Struct(
-        DataStruct{
-            fields: Named (
-                    FieldsNamed {
-                        ref named, ..
-                    }
-            ), ..
-        }
-    ) = ast.data
+    let fields = if let Struct(DataStruct {
+        fields: Named(FieldsNamed { ref named, .. }),
+        ..
+    }) = ast.data
     {
         named
-    }
-    else {
+    } else {
         unimplemented!();
     };
-    
+
     // eprintln!("fields: {:#?}", fields);
 
     let struct_init_fields = fields.iter().map(|f| {
@@ -40,16 +37,21 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let to_actual_type = |f: &Field| -> (syn::Type, bool) {
         // eprintln!("Field: {:#?}", f);
         if let Type::Path(TypePath {
-            path: inner_path, ..}) = &f.ty {
+            path: inner_path, ..
+        }) = &f.ty
+        {
             if inner_path.segments.len() == 1 {
                 let seg = &inner_path.segments.first().unwrap();
                 if seg.ident.to_string() == "Option" {
                     if let PathSegment {
-                        arguments: PathArguments::AngleBracketed(
-                            AngleBracketedGenericArguments {
-                                args: inner_args, ..
-                            }), ..
-                    } = seg {
+                        arguments:
+                            PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                                args: inner_args,
+                                ..
+                            }),
+                        ..
+                    } = seg
+                    {
                         if inner_args.len() == 1 {
                             if let GenericArgument::Type(ty) = &inner_args.first().unwrap() {
                                 return (ty.clone(), true);
@@ -61,12 +63,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
         return (f.ty.clone(), false);
     };
-    
+
     let builder_fields = fields.iter().map(|f| {
         let ident = &f.ident;
         let (actual_ty, _) = to_actual_type(&f);
-        
-        quote!{
+
+        quote! {
             #ident : std::option::Option<#actual_ty>
         }
     });
@@ -75,7 +77,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let builder_methods = fields.iter().map(|f| {
         let ident = &f.ident;
         let (ty, _) = to_actual_type(&f);
-        quote!{
+        quote! {
             pub fn #ident(&mut self, #ident: #ty) -> &mut Self {
                 self.#ident = Some(#ident);
                 self
@@ -90,8 +92,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             quote! {
                 #ident: self.#ident.clone()
             }
-        }
-        else {
+        } else {
             quote! {
                 #ident: self.#ident.clone().expect(concat!(stringify!(#ident), " is not set"))
             }
@@ -104,7 +105,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
             pub fn builder() -> #builder_ident {
                 #builder_ident {
                     #( #struct_init_fields ,)*
-                } 
+                }
             }
         }
 
