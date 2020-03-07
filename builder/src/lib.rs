@@ -34,6 +34,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     });
 
+    // To handle optional fields
     let to_actual_type = |f: &Field| -> (syn::Type, bool) {
         // eprintln!("Field: {:#?}", f);
         if let Type::Path(TypePath {
@@ -64,15 +65,47 @@ pub fn derive(input: TokenStream) -> TokenStream {
         return (f.ty.clone(), false);
     };
 
-    let builder_fields = fields.iter().map(|f| {
+    // Generated:
+    // #[derive(Builder)]
+    // pub struct Command {
+    //     executable: String,
+    //     #[builder(each = "arg")]
+    //     args: Vec<String>,
+    //     #[builder(each = "env")]
+    //     env: Vec<String>,
+    //     current_dir: Option<String>,
+    // }
+
+    let builder_struct_fields = fields.iter().map(|f| {
         let ident = &f.ident;
         let (actual_ty, _) = to_actual_type(&f);
 
+        if f.attrs.len() > 0 {
+            eprintln!("field {} attrs: {:#?}", ident.as_ref().unwrap().to_string(), f.attrs);
+        }
         quote! {
             #ident : std::option::Option<#actual_ty>
         }
     });
     // eprintln!("option fields: {:#?}", option_fields);
+
+    // Generated:
+    // pub fn executable(&mut self, executable: String) -> &mut Self {
+    //     self.executable = Some(executable);
+    //     self
+    // }
+    // pub fn args(&mut self, args: Vec<String>) -> &mut Self {
+    //     self.args = Some(args);
+    //     self
+    // }
+    // pub fn env(&mut self, env: Vec<String>) -> &mut Self {
+    //     self.env = Some(env);
+    //     self
+    // }
+    // pub fn current_dir(&mut self, current_dir: String) -> &mut Self {
+    //     self.current_dir = Some(current_dir);
+    //     self
+    // }
 
     let builder_methods = fields.iter().map(|f| {
         let ident = &f.ident;
@@ -85,7 +118,18 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
     });
 
-    let build_fields = fields.iter().map(|f| {
+
+    // Generated
+    // pub fn build(&mut self) -> Result<Command, Box<dyn std::error::Error>> {
+    //     Ok(Command {
+    //         executable: self.executable.clone().expect("executable is not set"),
+    //         args: self.args.clone().expect("args is not set"),
+    //         env: self.env.clone().expect("env is not set"),
+    //         current_dir: self.current_dir.clone(),
+    //     })
+    // }
+
+    let builder_build_fields = fields.iter().map(|f| {
         let ident = &f.ident;
         let (_, is_optional) = to_actual_type(&f);
         if is_optional {
@@ -110,7 +154,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
         }
 
         pub struct #builder_ident {
-            #( #builder_fields ,)*
+            #( #builder_struct_fields ,)*
         }
 
         impl #builder_ident {
@@ -118,7 +162,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
             pub fn build(&mut self) -> Result<#struct_ident, Box<dyn std::error::Error>> {
                 Ok(#struct_ident {
-                    #( #build_fields ,)*
+                    #( #builder_build_fields ,)*
                 })
             }
         }
