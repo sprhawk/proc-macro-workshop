@@ -4,8 +4,8 @@ use self::proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     parse_macro_input, AngleBracketedGenericArguments, Data::Struct, DataStruct, DeriveInput,
-    Field, Fields::Named, FieldsNamed, GenericArgument, PathArguments, PathSegment, Type, TypePath,
-    LitStr, Token, parse::{ Parse, ParseStream, Result }, 
+    Field, Fields::Named, FieldsNamed, GenericArgument, PathArguments, PathArguments:: { AngleBracketed }, PathSegment, Type, TypePath,
+    LitStr, Token, parse::{ Parse, ParseStream, Result}
 };
 
 #[derive(Debug)]
@@ -66,7 +66,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     });
 
     // To handle optional fields
-    let to_actual_type = |f: &Field| -> (syn::Type, bool) {
+    let to_actual_type_fn = |f: &Field| -> (syn::Type, bool) {
         // eprintln!("Field: {:#?}", f);
         if let Type::Path(TypePath {
             path: inner_path, ..
@@ -96,6 +96,39 @@ pub fn derive(input: TokenStream) -> TokenStream {
         return (f.ty.clone(), false);
     };
 
+    // used to find out inner type inside Vec
+    let inner_type_fn = |ty: &Type| -> Option<syn::Type> {
+        if let syn::Type::Path(TypePath {
+            path, ..
+        }) = ty {
+            if path.segments.len() == 1 {
+                let seg = path.segments.first().unwrap();
+                if let PathSegment {
+                    ident,
+                    arguments: AngleBracketed(
+                        AngleBracketedGenericArguments {
+                            args, ..
+                        }
+                    )
+                } = seg {
+                    if ident == "Vec" {
+                        if args.len() == 1 {
+                            let arg = args.first().unwrap();
+                            // eprintln!("arg: {:#?}", arg);
+                            if let GenericArgument::Type(ty) = arg {
+                                return Some(ty.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+        }
+
+        None
+    };
+
     // Generated:
     // #[derive(Builder)]
     // pub struct Command {
@@ -109,7 +142,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let builder_struct_fields = fields.iter().map(|f| {
         let ident = &f.ident;
-        let (actual_ty, _) = to_actual_type(&f);
+        let (actual_ty, _) = to_actual_type_fn(&f);
 
         quote! {
             #ident : std::option::Option<#actual_ty>
@@ -137,8 +170,9 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let builder_methods = fields.iter().map(|f| {
         let field_ident = &f.ident;
-        let (ty, _) = to_actual_type(&f);
-
+        let (ty, _) = to_actual_type_fn(&f);
+        
+        // eprintln!("actual type: {:#?}", ty);
         let mut tokenstream = 
             quote! {
                 pub fn #field_ident(&mut self, #field_ident: #ty) -> &mut Self {
@@ -160,11 +194,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
                     if parsed.ident == "each" {
                         let name = parsed.name.value();
                         let arg_ident = Ident::new(&name, Span::call_site());
+                        let inner_type = inner_type_fn(&ty);
                         let ts = quote! {
-                            fn #arg_ident(&mut self, #arg_ident: String) -> &mut Self {
+                            fn #arg_ident(&mut self, #arg_ident: #inner_type) -> &mut Self {
                                 if self.#field_ident.is_none() {
                                     // this is hard coded type
-                                    self.#field_ident = Some(Vec::<String>::new());
+                                    self.#field_ident = Some(Vec::<#inner_type>::new());
                                 }
                                 if let Some(a) = &mut self.#field_ident {
                                     a.push(#arg_ident);
@@ -205,7 +240,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let builder_build_fields = fields.iter().map(|f| {
         let ident = &f.ident;
-        let (_, is_optional) = to_actual_type(&f);
+        let (_, is_optional) = to_actual_type_fn(&f);
         if is_optional {
             quote! {
                 #ident: self.#ident.clone()
