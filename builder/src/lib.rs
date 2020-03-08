@@ -113,6 +113,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
                 } = seg {
                     if ident == "Vec" {
                         if args.len() == 1 {
+                            // to get inner type value
                             let arg = args.first().unwrap();
                             // eprintln!("arg: {:#?}", arg);
                             if let GenericArgument::Type(ty) = arg {
@@ -194,6 +195,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
                     if parsed.ident == "each" {
                         let name = parsed.name.value();
                         let arg_ident = Ident::new(&name, Span::call_site());
+                        // if the type is wrapped in Vec, we need to extract inner 'true' type
                         let inner_type = inner_type_fn(&ty);
                         let ts = quote! {
                             fn #arg_ident(&mut self, #arg_ident: #inner_type) -> &mut Self {
