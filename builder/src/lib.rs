@@ -5,7 +5,7 @@ use quote::{format_ident, quote};
 use syn::{
     parse_macro_input, AngleBracketedGenericArguments, Data::Struct, DataStruct, DeriveInput,
     Field, Fields::Named, FieldsNamed, GenericArgument, PathArguments, PathSegment, Type, TypePath,
-    Attribute, Path, LitStr, Token, parse::{ Parse, ParseStream, Result }, 
+    LitStr, Token, parse::{ Parse, ParseStream, Result }, 
 };
 
 #[derive(Debug)]
@@ -19,7 +19,9 @@ impl Parse for BuilderAttribute {
         let ident: Ident = input.parse()?;
         input.parse::<Token![=]>()?;
         let name: LitStr = input.parse()?;
-
+        if name.value() != "each" {
+            syn::Error::new(input.span(), "expected `builder(each = \"...\")`").to_compile_error();
+        }
         Ok(BuilderAttribute {
             ident,
             name,
@@ -50,7 +52,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
     let struct_init_fields = fields.iter().map(|f| {
         let ident = &f.ident;
         if let Type::Path(TypePath{ path ,.. } ) = &f.ty {
-            eprintln!("Path: {:#?}", path);
+            // eprintln!("Path: {:#?}", path);
             if path.segments.len() == 1 {
                 let p =  path.segments.first().unwrap();
                 if p.ident == "Vec" {
