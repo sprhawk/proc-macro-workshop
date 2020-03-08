@@ -56,12 +56,12 @@ pub fn derive(input: TokenStream) -> TokenStream {
             if path.segments.len() == 1 {
                 let p =  path.segments.first().unwrap();
                 if p.ident == "Vec" {
-                    return quote! { #ident: Some(Vec::<String>::new()) };
+                    return quote! { #ident: std::option::Option::<Vec<String>>::Some(Vec::<String>::new()) };
                 }
             }
         }
         quote! {
-            #ident: None
+            #ident: std::option::Option::<String>::None
         }
     });
 
@@ -163,6 +163,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
                         let ts = quote! {
                             fn #arg_ident(&mut self, #arg_ident: String) -> &mut Self {
                                 if self.#field_ident.is_none() {
+                                    /// this is hard coded type
                                     self.#field_ident = Some(Vec::<String>::new());
                                 }
                                 if let Some(a) = &mut self.#field_ident {
@@ -233,8 +234,8 @@ pub fn derive(input: TokenStream) -> TokenStream {
         impl #builder_ident {
             #( #builder_methods )*
 
-            pub fn build(&mut self) -> Result<#struct_ident, Box<dyn std::error::Error>> {
-                Ok(#struct_ident {
+            pub fn build(&mut self) -> std::result::Result<#struct_ident, std::boxed::Box<dyn std::error::Error>> {
+                std::result::Result::<#struct_ident, std::boxed::Box<dyn std::error::Error>>::Ok(#struct_ident {
                     #( #builder_build_fields ,)*
                 })
             }
