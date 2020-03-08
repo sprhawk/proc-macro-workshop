@@ -1,11 +1,31 @@
 extern crate proc_macro;
-
-use proc_macro::TokenStream;
+use proc_macro2::{Ident, Span};
+use self::proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     parse_macro_input, AngleBracketedGenericArguments, Data::Struct, DataStruct, DeriveInput,
     Field, Fields::Named, FieldsNamed, GenericArgument, PathArguments, PathSegment, Type, TypePath,
+    Attribute, Path, LitStr, Token, parse::{ Parse, ParseStream, Result }, 
 };
+
+#[derive(Debug)]
+struct BuilderAttribute {
+    ident: Ident,
+    name: LitStr,
+}
+
+impl Parse for BuilderAttribute {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let ident: Ident = input.parse()?;
+        input.parse::<Token![=]>()?;
+        let name: LitStr = input.parse()?;
+
+        Ok(BuilderAttribute {
+            ident,
+            name,
+        })
+    }
+}
 
 #[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
@@ -29,6 +49,15 @@ pub fn derive(input: TokenStream) -> TokenStream {
 
     let struct_init_fields = fields.iter().map(|f| {
         let ident = &f.ident;
+        if let Type::Path(TypePath{ path ,.. } ) = &f.ty {
+            eprintln!("Path: {:#?}", path);
+            if path.segments.len() == 1 {
+                let p =  path.segments.first().unwrap();
+                if p.ident == "Vec" {
+                    return quote! { #ident: Some(Vec::<String>::new()) };
+                }
+            }
+        }
         quote! {
             #ident: None
         }
@@ -80,9 +109,6 @@ pub fn derive(input: TokenStream) -> TokenStream {
         let ident = &f.ident;
         let (actual_ty, _) = to_actual_type(&f);
 
-        if f.attrs.len() > 0 {
-            eprintln!("field {} attrs: {:#?}", ident.as_ref().unwrap().to_string(), f.attrs);
-        }
         quote! {
             #ident : std::option::Option<#actual_ty>
         }
@@ -108,14 +134,59 @@ pub fn derive(input: TokenStream) -> TokenStream {
     // }
 
     let builder_methods = fields.iter().map(|f| {
-        let ident = &f.ident;
+        let field_ident = &f.ident;
         let (ty, _) = to_actual_type(&f);
-        quote! {
-            pub fn #ident(&mut self, #ident: #ty) -> &mut Self {
-                self.#ident = Some(#ident);
-                self
+
+        let mut tokenstream = 
+            quote! {
+                pub fn #field_ident(&mut self, #field_ident: #ty) -> &mut Self {
+                    self.#field_ident = Some(#field_ident);
+                    self
+                }
+            };
+        
+        for attr in f.attrs.iter() {
+            let segs = &attr.path.segments;
+            if segs.len() == 1 {
+                let seg = segs.first().unwrap();
+                let attr_ident = &seg.ident;
+                if attr_ident == "builder"  {
+                    // let meta = attr.tokens.parse_meta().expect("only attribute name 'each' is supported");
+                    let parsed = attr.parse_args::<BuilderAttribute>().expect("not parsed");
+                    // eprintln!("parsed meta: {:#?}", parsed);
+
+                    if parsed.ident == "each" {
+                        let name = parsed.name.value();
+                        let arg_ident = Ident::new(&name, Span::call_site());
+                        let ts = quote! {
+                            fn #arg_ident(&mut self, #arg_ident: String) -> &mut Self {
+                                if self.#field_ident.is_none() {
+                                    self.#field_ident = Some(Vec::<String>::new());
+                                }
+                                if let Some(a) = &mut self.#field_ident {
+                                    a.push(#arg_ident);
+                                }
+                                self
+                            }
+                        };
+                        if let Some(ident) = field_ident {
+                            let field_name = ident.to_string();
+                            if name == field_name {
+                                tokenstream = ts;
+                            }
+                            else {
+                                tokenstream.extend(ts);
+                            }
+                        }
+                        // eprintln!("arg name: {:#?}", name);
+                    }
+                }
             }
+            // eprintln!("field {} attr: {:#?}", ident.as_ref().unwrap().to_string(), attr);
+            
         }
+
+        tokenstream        
     });
 
 
