@@ -163,7 +163,7 @@ pub fn derive(input: TokenStream) -> TokenStream {
                         let ts = quote! {
                             fn #arg_ident(&mut self, #arg_ident: String) -> &mut Self {
                                 if self.#field_ident.is_none() {
-                                    /// this is hard coded type
+                                    // this is hard coded type
                                     self.#field_ident = Some(Vec::<String>::new());
                                 }
                                 if let Some(a) = &mut self.#field_ident {
